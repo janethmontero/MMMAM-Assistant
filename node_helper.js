@@ -71,13 +71,25 @@ module.exports = NodeHelper.create({
         if (this.status !== 'ACTIVATE_COMMAND') {
           this.status = 'ACTIVATE_COMMAND'
           if(this.config.system.commandRecognition == 'google-cloud-speech') {
-            if(this.pause.size == 0) this.activateCommand()
+            if(this.pause.size == 0){
+              this.activateCommand()
+              console.log("AQUIII");
+            } else{
+              console.log("OOO AQUII");
+            }
           } else if (this.config.system.commandRecognition == 'google-assistant') {
-            if(this.pause.size == 0) this.activateAssistant('COMMAND')
+            console.log("NOOOO");
+            if(this.pause.size == 0){
+              this.activateAssistant('COMMAND')
+              console.log("MENOOS");
+            }
           }
 
+        }else{
+          console.log("MAYBE NO ENTRE =/");
         }
         break
+
       case 'SPEAK':
         if (this.status !== 'ACTIVATE_SPEAK') {
           this.status = 'ACTIVATE_SPEAK'
@@ -144,33 +156,7 @@ module.exports = NodeHelper.create({
       }
     })
   },
-
-  /*
-  activateSpeak_espeak: function(text) {
-    //@DEPRECATED
-    this.sendSocketNotification('MODE', {mode:'SPEAK_STARTED'})
-    var script = "espeak"
-    script += (
-      (this.config.espeak.language)
-        ? (" -v " + this.config.espeak.language)
-        : ""
-    )
-    script += (
-      (this.config.espeak.speed)
-        ? (" -s " + this.config.espeak.speed)
-        : ""
-    )
-    script += ((this.config.espeak.ssml) ? (" -m") : "")
-    script += " \'" + text + "\'"
-    exec (script, (err, stdout, stderr)=>{
-      if (err == null) {
-        console.log("[ASSTNT] Speak: ", text)
-        this.sendSocketNotification('MODE', {mode:'SPEAK_ENDED'})
-      }
-    })
-    if (this.pause.size > 0) this.sendSocketNotification('PAUSED')
-  },
-  */
+  
   activateHotword: function() {
     console.log('[ASSTNT] Snowboy Activated')
     this.sendSocketNotification('MODE', {mode:'HOTWORD_STARTED'})
@@ -191,6 +177,7 @@ module.exports = NodeHelper.create({
       if (this.pause.size > 0) {
         record.stop()
         this.sendSocketNotification('PAUSED')
+        console.log("ASSISTENT 111111111");
         return
       }
     })
@@ -198,6 +185,7 @@ module.exports = NodeHelper.create({
       if (this.pause.size > 0) {
         record.stop()
         this.sendSocketNotification('PAUSED')
+        console.log("ASSISTENT 222222222");
         return
       }
     })
@@ -206,6 +194,7 @@ module.exports = NodeHelper.create({
       console.log('[ASSTNT] Detector Error', err)
       record.stop()
       this.sendSocketNotification('ERROR', 'DETECTOR')
+      console.log("ASSISTENT 33333333");
       return
     })
 
@@ -214,121 +203,20 @@ module.exports = NodeHelper.create({
       new Sound(path.resolve(__dirname, 'resources/dong.wav')).play()
       this.sendSocketNotification('HOTWORD_DETECTED', hotword)
       this.sendSocketNotification('MODE', {mode:'HOTWORD_DETECTED'})
-      if (this.pause.size > 0) this.sendSocketNotification('PAUSED')
+      console.log("ASSISTENT 444444444");
+      if (this.pause.size > 0){
+        console.log("ASSISTENT 555555555");
+         this.sendSocketNotification('PAUSED')
+
+      }
       return
     })
 
     mic.pipe(detector);
   },
 
-  activateAssistant: function(mode = 'ASSISTANT') {
-    var transcription = ""
-    console.log('[ASSTNT] Assistant Activated')
-    this.sendSocketNotification('MODE', {mode:'ASSISTANT_STARTED'})
-    const assistant = new GoogleAssistant(this.config.assistant)
-
-    const startConversation = (conversation) => {
-      //console.log('Say something!');
-
-      let spokenResponseLength = 0;
-      let speakerOpenTime;
-      let speakerTimer;
-
-      conversation
-        .on('audio-data', (data) => {
-          //record.stop()
-          const now = new Date().getTime()
-          if (mode == 'ASSISTANT') {
-            this.sendSocketNotification('MODE', {mode:'ASSISTANT_SPEAKING'})
-            speaker.write(data);
-            spokenResponseLength += data.length;
-            const audioTime
-              = spokenResponseLength / (this.config.assistant.audio.sampleRateOut * 16 / 8) * 1000;
-            clearTimeout(speakerTimer);
-            speakerTimer = setTimeout(() => {
-              speaker.end();
-            }, audioTime - Math.max(0, now - speakerOpenTime));
-          } else {
-            //record.stop()
-            speaker.end()
-          }
-
-        })
-        .on('end-of-utterance', () => {
-          record.stop()
-        })
-        .on('transcription', (text) => {
-            this.sendSocketNotification('ASSISTANT_TRANSCRIPTION', text)
-            transcription = text
-            console.log("[ASSTNT] GA Transcription: ", transcription)
-            //record.stop()
-            if (mode == 'COMMAND') {
-              console.log("[ASSTNT] Command recognized:",transcription)
-              this.sendSocketNotification('COMMAND',transcription)
-            }
-        })
-        .on('ended', (error, continueConversation) => {
-          if (this.pause.size > 0) {
-            record.stop()
-            speaker.end()
-            this.sendSocketNotification('PAUSED')
-            return
-          }
-          if (error) {
-            console.log('[ASSTNT] Conversation Ended Error:', error)
-            this.sendSocketNotification('ERROR', 'CONVERSATION ENDED')
-          } else if (continueConversation) {
-            if (mode == 'ASSISTANT') {
-              assistant.start()
-            } else {
-              //@.@ What? There is no stop-conversation in gRpc ?????
-            }
-          }
-          else {
-            record.stop()
-            this.sendSocketNotification('ASSISTANT_FINISHED', mode)
-          }
-        })
-        .on('error', (error) => {
-          console.log('[ASSTNT] Conversation Error:', error);
-          record.stop()
-          this.sendSocketNotification('ERROR', 'CONVERSATION')
-        })
-
-
-      // pass the mic audio to the assistant
-      var mic = record.start(this.config.record)
-      mic.on('data', data => conversation.write(data));
-
-      // setup the speaker
-      var speaker = new Speaker({
-        channels: 1,
-        sampleRate: this.config.assistant.audio.sampleRateOut,
-      });
-      speaker
-        .on('open', () => {
-          speakerOpenTime = new Date().getTime();
-        })
-        .on('close', () => {
-          conversation.end();
-        });
-    };
-
-    // setup the assistant
-    assistant
-      .on('ready', () => {
-        assistant.start()
-      })
-      .on('started', startConversation)
-      .on('error', (error) => {
-        console.log('[ASSTNT] Assistant Error:', error)
-        record.stop()
-        speaker.end()
-        this.sendScoketNotification('ERROR', 'ASSISTANT')
-      })
-  },
-
   activateCommand: function() {
+    console.log("111111");
     this.sendSocketNotification('MODE', {mode:'COMMAND_STARTED'})
     const speech = Speech(this.config.stt.auth[this.commandAuthIndex++])
     if (this.commandAuthIndex >= this.commandAuthMax) this.commandAuthIndex = 0
@@ -359,6 +247,7 @@ module.exports = NodeHelper.create({
         if (this.pause.size > 0) {
           record.stop()
           this.sendSocketNotification('PAUSED')
+          console.log("---SI ENTRO AQUI, ES DONDE SE PAUSEA Y SE PONE ROJO??")
         }
       })
 
@@ -369,6 +258,7 @@ module.exports = NodeHelper.create({
         console.log("[ASSTNT] Recording Error: ",err)
         record.stop()
         this.sendSocketNotification('ERROR', 'RECORD ERROR')
+        console.log("O AQUI SE TRABA??");
       })
       .pipe(recognizeStream);
   }

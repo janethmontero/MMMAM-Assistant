@@ -19,6 +19,10 @@ if (String.prototype.toRegExp !== 'undefined') {
 
 
 Module.register("MMMAM-Assistant", {
+
+  currentMedication: '',
+  doCurrentMedication: false,
+
   defaults: {
     system: {
       readAlert : true, // reserved for later
@@ -78,8 +82,12 @@ Module.register("MMMAM-Assistant", {
     speechCurrentWeather: '',
     speechMedicalAlert: '',
     speechNextAlert: '',
-    speechDetailsNextAlert: ''
+    speechDetailsNextAlert: '',
+    waitSpeech: false
+
   },
+
+
 
   start: function() {
     console.log("[ASSTNT] started!")
@@ -113,12 +121,17 @@ Module.register("MMMAM-Assistant", {
       var commands = [
         {
           command: 'Dime el clima',
-          callback : 'cmd_sayTheWeather',
+          callback : 'cmd_SayTheWeather',
           description : "Puedes saber el clima con este comando.",
         },
         {
           command: 'oculta el mensaje',
-          callback : 'cmd_hideMedicalAlert',
+          callback : 'cmd_HideMedicalAlert',
+          description : "Oculta las alertas mostradas en pantalla, en caso de que halla una.",
+        },
+        {
+          command: 'ya tomé mi medicamento',
+          callback : 'cmd_RecordMedication',
           description : "Oculta las alertas mostradas en pantalla, en caso de que halla una.",
         },
         {
@@ -138,9 +151,15 @@ Module.register("MMMAM-Assistant", {
         },
         {
           command: 'actualiza la lista de medicamentos',
-          callback : 'cmd_updateMedicalList',
+          callback : 'cmd_UpdateMedicalList',
           description : "Actualiza el calendario de medicamentos.",
         },
+        {
+          command: '¿tengo medicamentos pendientes?',
+          callback : 'cmd_ShowPendingMedication',
+          description : "Actualiza el calendario de medicamentos.",
+        }
+
       ]
       commands.forEach((c) => {
         Register.add(c)
@@ -148,8 +167,8 @@ Module.register("MMMAM-Assistant", {
     }
   },
 
-  cmd_sayTheWeather : function(command, handler) {
-
+  //METODOS QUE CONTROLAN LA ACCION DE LOS COMANDOS
+  cmd_SayTheWeather : function(command, handler) {
     var option = {
       language: 'es-ES',
       useAlert: false
@@ -157,15 +176,39 @@ Module.register("MMMAM-Assistant", {
     handler.reply('TEXT', speechCurrentWeather, option)
   },
 
-  cmd_hideMedicalAlert: function(command, handler) {
+  cmd_HideMedicalAlert: function(command, handler) {
     this.sendNotification("CALENDAR_HIDE_MEDICAL_ALERT");
     this.sendNotification("HIDE_ALERT");
-    //handler.response("Muy bien!");
+
     var option = {
       language: 'es-ES',
       useAlert: false
     }
     handler.reply("TEXT","Entendido!", option)
+  },
+
+  cmd_RecordMedication: function(command, handler) {
+    var option = {
+      language: 'es-ES',
+      useAlert: false
+    }
+    console.log(this.currentMedication);
+    if (this.currentMedication !== undefined && !this.doCurrentMedication) {
+      console.log(this.currentMedication);
+      // Implementar que al llamar a este metodo se actualize calendario...
+      // 1. Para esto sera necesario analizar la API de google calendar y crear modulo especializado
+      this.doCurrentMedication = true;
+      // 2. Despues de actualizar el evento, reiniciar el modulo CalendarDay
+      this.sendNotification("UPDATE_CURRENT_MEDICATION", this.currentMedication);
+      this.sendNotification("RESET_CALENDAR");
+      // 3. Si no hubo errores si implementara el siguiente codigo
+      this.sendNotification("CALENDAR_HIDE_MEDICAL_ALERT");
+      this.sendNotification("HIDE_ALERT");
+
+      handler.reply("TEXT","Toma de medicamento registrada!", option)
+    //}
+    }
+    handler.reply("TEXT","No es posible hacer el registro, ya que no hay medicamentos pendientes.", option)
   },
 
   cmd_SayNextAlert: function(command, handler) {
@@ -177,7 +220,6 @@ Module.register("MMMAM-Assistant", {
   },
 
   cmd_SayMedicalAlert(command){
-
     var option = {
       language: 'es-ES',
       useAlert: false
@@ -191,6 +233,16 @@ Module.register("MMMAM-Assistant", {
     handler.reply("TEXT",speechMedicalAlert, option);
   },
 
+  cmd_UpdateMedicalList: function (command, handler) {
+    //No actualiza, hacer que al llamar este metodo reinicie el modulo CalendarDay
+    this.sendNotification("RESET_CALENDAR");
+    var option = {
+      language: 'es-ES',
+      useAlert: false
+    }
+    handler.reply("TEXT", "Entendido!", option)
+  },
+
   cmd_asstnt_say : function (command, handler) {
     var option = {
       language: 'es-ES',
@@ -199,14 +251,6 @@ Module.register("MMMAM-Assistant", {
     handler.reply("TEXT", handler.args.something, option)
   },
 
-  cmd_updateMedicalList: function (command, handler) {
-    this.sendNotification("UPDATE_CALENDAR_LIST");
-    var option = {
-      language: 'es-ES',
-      useAlert: false
-    }
-    handler.reply("TEXT", "Entendido!", option)
-  },
 
   registerCommand: function(module, commandObj) {
     var c = commandObj
@@ -301,6 +345,14 @@ Module.register("MMMAM-Assistant", {
     console.log("NOTIFICACION RECIBIDA: "+notification);
     switch(notification) {
 
+      case 'UPDATE_PENDING_MEDICATION':
+        this.currentMedication = payload
+        this.doCurrentMedication = false;
+
+        console.log(this.currentMedication + ": " + this.doCurrentMedication );
+
+        break
+
       case 'MEDICAL_ALERT_DATA':
         speechMedicalAlert = payload
         console.log(speechMedicalAlert)
@@ -319,6 +371,7 @@ Module.register("MMMAM-Assistant", {
         break
         //DE AQUI HACIA ARRIBA ESTAN LAS NOTIFICACIONES DE MEDICAL ALERT
       case 'ASSISTANT_REQUEST_PAUSE':
+        console.log("*******")
         this.sendSocketNotification('PAUSE', sender.name)
         break
       case 'ASSISTANT_REQUEST_RESUME':
@@ -357,6 +410,7 @@ Module.register("MMMAM-Assistant", {
       case 'PAUSED':
         this.status == 'PAUSED'
         this.updateDom()
+        console.log("---ME PAUSIE, NO SE PORQUE ¿?")
         this.sendNotification('ASSISTANT_PAUSED')
         break;
       case 'RESUMED':
@@ -365,9 +419,17 @@ Module.register("MMMAM-Assistant", {
         this.sendNotification('ASSISTANT_RESUMED')
         break;
       case 'HOTWORD_DETECTED':
-        this.status = "HOTWORD_DETECTED"
-        console.log("[ASSTNT] Hotword detected:", payload)
-        this.hotwordDetected(payload)
+        //REVISAR AQUI, ENTRA MUCHAS VECES Y SE BLOQUEA, MAYBE AGREGAR UNA VARIABLE QUE CONTROLE SOLO UNA ENTRADA
+        console.log("***[ASSTNT] Hotword detected:", payload)
+        if (!this.waitSpeech) {
+          this.status = "HOTWORD_DETECTED"
+
+          console.log("[ASSTNT] Hotword detected:", payload)
+          this.hotwordDetected(payload)
+        }else{
+
+        }
+
         break
       case 'READY':
         this.status = "HOTWORD_STANDBY"
@@ -392,22 +454,27 @@ Module.register("MMMAM-Assistant", {
         //this.sendSocketNotification("HOTWORD_STANDBY")
         break;
       case 'ERROR':
-        this.status = "ERROR"
+        //this.status = "ERROR"
         console.log("[ASSTNT] Error:", payload)
-        //this.sendSocketNotification("HOTWORD_STANDBY")
+        this. status = "HOTWORD_STANDBY";
+        this.waitSpeech = false;
+        this.sendSocketNotification("HOTWORD_STANDBY") // este estaba comentado
         break
       case 'MODE':
         this.status = payload.mode
         if (payload.mode == 'SPEAK_ENDED') {
           //CUIDADO AQUI, AL COMENTAR ESTA LINEA E ARREGLO ERROR DEL SPEECH DE CLIMA PERO PUEDE MARCAR OTROS
           this.sendNotification("HIDE_ALERT");
+          this.waitSpeech = false;
           this.sendSocketNotification("HOTWORD_STANDBY")
         }
 
         if (payload.mode == 'SPEAK_STARTED') {
+          console.log("ENTRO AQUI?")
           if (payload.useAlert) {
             var html = "<p class='yourcommand mdi mdi-voice'> \"" + payload.originalCommand + "\"</p>"
             html += "<div class='answer'>" + payload.text + "</div>"
+            console.log("AQUI ANDO");
             this.sendNotification(
               'SHOW_ALERT',
               {
@@ -430,9 +497,17 @@ Module.register("MMMAM-Assistant", {
       //this.sendSocketNotification('ACTIVATE_ASSISTANT')
       //this.status = 'ACTIVATE_ASSISTANT'
     } else if (type == 'EMMA') {
+      this.waitSpeech = true;
 
-      this.sendSocketNotification('ACTIVATE_COMMAND')
-      this.status = 'ACTIVATE_COMMAND'
+      console.log("IDENTIFIQUE EMMA")
+        this.status = 'ACTIVATE_COMMAND'
+
+      var timer = setTimeout(() => {
+        this.sendSocketNotification('ACTIVATE_COMMAND')
+
+      }, 150);
+
+
     }
 
   },
